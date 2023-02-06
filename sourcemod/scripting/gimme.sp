@@ -4,7 +4,7 @@
 
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.13"
+#define PLUGIN_VERSION "1.17"
 
 public const int warpaintedWeps[45] = { 
 	37, 172, 194, 197, 199, 200, 201, 202, 203, 205, 206, 207, 208, 209, 210,
@@ -28,18 +28,20 @@ public const int festiveWeps[224] = {
 	15132, 15133, 15134, 15135, 15136, 15137, 15138, 15139, 15140, 15141, 15142, 15143, 15144, 15145, 15146,
 	15147, 15148, 15148, 15149, 15150, 15151, 15152, 15153, 15154, 15155, 15156, 15157, 15158 };
 
-public const int bannedItems[2] = {
-	30015, 30535 };
+public const int bannedItems[1] = {
+	5021 };
 
 public Plugin myinfo =
 {
-	name = "[TF2] Gimme",
+	name = "[TF2] Gimme (Modified)",
 	author = "PC Gamer",
 	description = "Give yourself or others an item. Clone players.",
 	version = PLUGIN_VERSION,
 	url = "www.sourcemod.com"
 }
 
+ConVar g_hPreventGivingWeapons;
+ConVar g_hPreventGivingCosmetics;
 ConVar g_hWeaponEffects;
 ConVar g_hEnforceClassWeapons;
 ConVar g_hEnforceClassCosmetics;
@@ -57,6 +59,8 @@ public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 
+	g_hPreventGivingWeapons = CreateConVar("sm_gimme_prevent_giving_weapons", "0", "Enables/disables ability to give weapons", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	g_hPreventGivingCosmetics = CreateConVar("sm_gimme_prevent_giving_cosmetics", "0", "Enables/disables ability to give cosmetics", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_hWeaponEffects = CreateConVar("sm_gimme_effects_enabled", "0", "Enables/disables unusual effects on gimme weapons", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_hEnforceClassWeapons = CreateConVar("sm_gimme_enforce_class_weapons", "1", "Enables/disables enforcement of class specific weapons", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_hEnforceClassCosmetics = CreateConVar("sm_gimme_enforce_class_cosmetics", "1", "Enables/disables enforcement of class specific cosmetics", FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -115,7 +119,7 @@ public void OnPluginStart()
 		CustomItemsTrieSetup(g_hItemInfoTrie);
 	}
 	
-	HookEvent("post_inventory_application", player_inv);	
+	HookEvent("post_inventory_application", player_inv);
 }
 
 public void OnMapStart()
@@ -142,7 +146,7 @@ public Action GivePermItems(Handle timer, int userd)
 	int client = GetClientOfUserId(userd);
 	if (g_iPermClass[client] == view_as<int>(TF2_GetPlayerClass(client)))
 	{
-		TF2_RemoveAllWearables(client);
+		//TF2_RemoveAllWearables(client);
 
 		for (int i = 0; i < g_iHasPermItems[client]+1; i++)
 		{
@@ -277,10 +281,10 @@ public Action Command_GetItem(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: !gimme <index number>");
-		ReplyToCommand(client, "or gimme <index number> <0> <unusual effect number> <paint id>");		
+		ReplyToCommand(client, "or gimme <index number> <0> <unusual effect number (or 999 for random)> <paint id>");		
 		ReplyToCommand(client, "or gimme <warpaintable weapon id> <warpaint id>");		
 		ReplyToCommand(client, "examples: !gimme 205  or  !gimme 666  or  !gimme 205 200"); 
-		ReplyToCommand(client, "for list of index numbers type: !index. Paint Ids are 1-29"); 
+		ReplyToCommand(client, "for list of index numbers type: !index. Paint Ids are 1-29 (or 999 for random paint)"); 
 
 		return Plugin_Handled; 		
 	}
@@ -304,7 +308,7 @@ public Action Command_GetItem(int client, int args)
 
 		if (itemindex > 49999)
 		{
-			ReplyToCommand(client, "[SM] Gimme item index number must be under 40000.");
+			ReplyToCommand(client, "[SM] Gimme item index number must be under 50000.");
 			
 			return Plugin_Handled;
 		}
@@ -345,6 +349,20 @@ public Action Command_GetItem(int client, int args)
 			return Plugin_Handled;  			
 		}
 	}
+
+	if (itemSlot > 5 && g_hPreventGivingCosmetics.BoolValue)
+	{	
+		PrintToChat(client, "Giving cosmetics is currently disabled");
+
+		return Plugin_Handled;  			
+	}	
+	
+	if (itemSlot < 6 && g_hPreventGivingWeapons.BoolValue)
+	{	
+		PrintToChat(client, "Giving weapons is currently disabled");
+
+		return Plugin_Handled;  			
+	}
 	
 	if (g_bMedieval && itemSlot < 6)
 	{
@@ -358,7 +376,7 @@ public Action Command_GetItem(int client, int args)
 
 	if (itemindex > 49999)
 	{
-		ReplyToCommand(client, "[SM] Gimme item index number must be under 40000.");
+		ReplyToCommand(client, "[SM] Gimme item index number must be under 50000.");
 		
 		return Plugin_Handled;
 	}
@@ -370,9 +388,9 @@ public Action Command_GetItem(int client, int args)
 		return Plugin_Handled;
 	}
 
-	if (paint > 29)
+	if (paint > 29 && paint < 999)
 	{
-		ReplyToCommand(client, "[SM] Invalid paint id. Valid paint ids are 0 thru 29");
+		ReplyToCommand(client, "[SM] Invalid paint id. Valid paint ids are 0 thru 29 (or 999 for random paint)");
 	}
 
 	if (paint < 0)
@@ -412,16 +430,6 @@ public Action Command_GetItem(int client, int args)
 		wpaint = 0;
 	}
 	
-	if (paint < 0)
-	{
-		paint = 0;
-	}
-
-	if (paint > 29)
-	{
-		ReplyToCommand(client, "Paint id must be a number 0 thru 29");
-	}
-	
 	EquipItemByItemIndex(client, itemindex, wpaint, effect, paint);
 	
 	return Plugin_Handled;
@@ -440,9 +448,9 @@ public Action Command_GiveItem(int client, int args)
 	{
 		ReplyToCommand(client, "[SM] Usage: giveitem <target> <item index number>");
 		ReplyToCommand(client, "or giveitem <target> <warpaintable weapon index number> <warpaint id>");		
-		ReplyToCommand(client, "or giveitem <target> <index number> <0> <unusual effect number> <paint id>");		
+		ReplyToCommand(client, "or giveitem <target> <index number> <0> <unusual effect number (or 999 for random)> <paint id>");		
 		ReplyToCommand(client, "examples: !giveitem @all 666  or  !giveitem robert 205 303  or !giveitem sally 666 0 13"); 
-		ReplyToCommand(client, "valid paint ids are 1 thru 29. For list of index numbers type: !index   "); 		
+		ReplyToCommand(client, "valid paint ids are 1 thru 29 (or 999 for random). For list of index numbers type: !index   "); 		
 	}
 	
 	char arg2[32];
@@ -510,9 +518,9 @@ public Action Command_GiveItem(int client, int args)
 		paint = 0;
 	}
 
-	if (paint > 29)
+	if (paint > 29 && paint < 999)
 	{
-		ReplyToCommand(client, "[SM] Invalid paint id. Valid paint ids are 0 thru 29");
+		ReplyToCommand(client, "[SM] Invalid paint id. Valid paint ids are 0 thru 29 (or 999 for random)");
 	}	
 
 	char arg[65];
@@ -560,7 +568,7 @@ public Action Command_GiveItemPerm(int client, int args)
 	{
 		ReplyToCommand(client, "[SM] Usage: giveitem <target> <item index number>");
 		ReplyToCommand(client, "or giveitemp <target> <warpaintable weapon index number> <warpaint id>");		
-		ReplyToCommand(client, "or giveitemp <target> <index number> <0> <unusual effect number>");		
+		ReplyToCommand(client, "or giveitemp <target> <index number> <0> <unusual effect number(or 999 for random)>");		
 		ReplyToCommand(client, "examples: !giveitemp @all 666  or  !giveitemp robert 205 303  or !giveitemp sally 666 0 13"); 
 		ReplyToCommand(client, "for list of index numbers type: !index"); 		
 	}
@@ -1094,7 +1102,7 @@ Action Command_Permanent_Items(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: !gimme <index number>");
-		ReplyToCommand(client, "or gimme <index number> <0> <unusual effect number>");		
+		ReplyToCommand(client, "or gimme <index number> <0> <unusual effect number(or 999 for random)>");		
 		ReplyToCommand(client, "or gimme <warpaintable weapon id> <warpaint id>");		
 		ReplyToCommand(client, "examples: !gimme 205  or  !gimme 666  or  !gimme 205 200"); 
 		ReplyToCommand(client, "for list of index numbers type: !index"); 
@@ -1175,6 +1183,20 @@ Action Command_Permanent_Items(int client, int args)
 		}
 	}
 	
+	if (itemSlot > 5 && g_hPreventGivingCosmetics.BoolValue)
+	{	
+		PrintToChat(client, "Giving cosmetics is currently disabled");
+
+		return Plugin_Handled;  			
+	}	
+	
+	if (itemSlot < 6 && g_hPreventGivingWeapons.BoolValue)
+	{	
+		PrintToChat(client, "Giving weapons is currently disabled");
+
+		return Plugin_Handled;  			
+	}	
+	
 	if (g_bMedieval && itemSlot < 6)
 	{
 		if(itemSlot !=2)
@@ -1187,7 +1209,7 @@ Action Command_Permanent_Items(int client, int args)
 
 	if (itemSlot < 6 && itemindex > 49999)
 	{
-		ReplyToCommand(client, "[SM] Gimme weapon index number must be under 40000.");
+		ReplyToCommand(client, "[SM] Gimme weapon index number must be under 50000.");
 		
 		return Plugin_Handled;
 	}	
@@ -1210,9 +1232,9 @@ Action Command_Permanent_Items(int client, int args)
 		}
 	}
 	
-	if (paint > 29)
+	if (paint > 29 && paint !=999)
 	{
-		ReplyToCommand(client, "[SM] Invalid paint id.  Valid paint ids are 0-29");	
+		ReplyToCommand(client, "[SM] Invalid paint id.  Valid paint ids are 0-29 (or 999 for random)");	
 		
 		return Plugin_Handled;
 	}
@@ -1402,6 +1424,18 @@ int Items_CreateNamedItem(int client, int itemindex, const char[] classname, int
 			SetEntProp(newitem, Prop_Send, "m_aBuildableObjectTypes", 0, _, 2);
 			SetEntProp(newitem, Prop_Send, "m_aBuildableObjectTypes", 1, _, 3);
 		}
+	case 129, 1001:
+		{
+			TF2Attrib_SetByName(newitem, "mod soldier buff type", 1.0);
+			//TF2Attrib_SetByName(newitem, "effect bar recharge rate increased", 0.01);
+			//TF2Attrib_SetByName(newitem, "fire rate bonus", 0.3);
+		}
+	case 812:
+		{
+			//TF2Attrib_SetByName(newitem, "cleaver description", 1.0);
+			//TF2Attrib_SetByName(newitem, "effect bar recharge rate increased", 0.01);
+			//TF2Attrib_SetByName(newitem, "fire rate bonus", 0.3);
+		}
 	case 998:
 		{
 			SetEntData(newitem, FindSendPropInfo(entclass, "m_nChargeResistType"), GetRandomInt(0,2));
@@ -1415,9 +1449,9 @@ int Items_CreateNamedItem(int client, int itemindex, const char[] classname, int
 			DispatchSpawn(newitem);
 			EquipPlayerWeapon(client, newitem);
 
-			char itemname[64];
-			TF2Econ_GetItemName(itemindex, itemname, sizeof(itemname));
-			PrintToChat(client, "%N received item %d (%s)", client, itemindex, itemname);
+			//char itemname[64];
+			//TF2Econ_GetItemName(itemindex, itemname, sizeof(itemname));
+			//PrintToChat(client, "%N received item %d (%s)", client, itemindex, itemname);
 			
 			return newitem; 
 		}
@@ -1436,11 +1470,12 @@ int Items_CreateNamedItem(int client, int itemindex, const char[] classname, int
 		SetEntData(newitem, FindSendPropInfo(entclass, "m_iEntityQuality"), 15);		
 	}
 
-	if(FindIfCanBeFestive)
+	
+	if(GetRandomInt(1,100) == 1) //festive check
 	{
-		if(GetRandomInt(1,30) == 1) //festive check
+		if(FindIfCanBeFestive(itemindex))
 		{
-			//			TF2Attrib_SetByDefIndex(newitem, 2053, 1.0);
+			//TF2Attrib_SetByDefIndex(newitem, 2053, 1.0);
 		}
 	}
 	
@@ -1484,12 +1519,9 @@ int Items_CreateNamedItem(int client, int itemindex, const char[] classname, int
 		SetEntData(newitem, FindSendPropInfo(entclass, "m_iEntityQuality"), 5);	
 		if (effect == 999)
 		{
-			TF2Attrib_SetByDefIndex(newitem, 134, GetRandomInt(1,223) + 0.0);
+			effect = GetRandomInt(1,278);
 		}
-		else
-		{
-			TF2Attrib_SetByDefIndex(newitem, 134, effect + 0.0);
-		}
+		TF2Attrib_SetByDefIndex(newitem, 134, effect + 0.0);
 	}
 	
 	if(weaponSlot < 2)
@@ -1499,6 +1531,11 @@ int Items_CreateNamedItem(int client, int itemindex, const char[] classname, int
 	
 	if (paint > 0)
 	{
+		if (paint == 999)
+		{
+			paint = GetRandomInt(1,29);
+		}
+		
 		switch(paint)
 		{
 		case 1:
@@ -1656,7 +1693,13 @@ int Items_CreateNamedItem(int client, int itemindex, const char[] classname, int
 		RemoveConflictWearables(client, itemindex);
 
 		SDKCall(g_hEquipWearable, client, newitem);
-	}	
+	}
+	else if (StrEqual("tf_powerup_bottle", classname, true))
+	{
+		RemoveConflictWearables(client, itemindex);
+
+		SDKCall(g_hEquipWearable, client, newitem);
+	}
 	else
 	{
 		EquipPlayerWeapon(client, newitem);
@@ -1831,15 +1874,18 @@ int Items_CreateNamedItem(int client, int itemindex, const char[] classname, int
 		TF2_SwitchtoSlot(client, 0);	
 	}
 
-	char itemname[64];
-	TF2Econ_GetItemName(itemindex, itemname, sizeof(itemname));
-	PrintToChat(client, "%N received item %d, %s, warpaint: %i, effect: %i, paint: %i", client, itemindex, itemname, warpaint, effect, paint);
-	
+	//if(itemindex != 1132)
+	//{
+		//char itemname[64];
+		//TF2Econ_GetItemName(itemindex, itemname, sizeof(itemname));
+		//PrintToChat(client, "%N received item %d, %s, warpaint: %i, effect: %i, paint: %i", client, itemindex, itemname, warpaint, effect, paint);
+	//}
 	return newitem;
 } 
 
 stock void TF2_SwitchtoSlot(int client, int slot)
 {
+	/*
 	if (slot >= 0 && slot <= 5 && IsClientInGame(client) && IsPlayerAlive(client))
 	{
 		char wepclassname[64];
@@ -1850,6 +1896,7 @@ stock void TF2_SwitchtoSlot(int client, int slot)
 			SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", wep);
 		}
 	}
+	*/
 }
 
 int GetRandomUInt(int min, int max)
@@ -2127,6 +2174,12 @@ public int GiveWeaponCustom(int client, int configindex)
 
 		SDKCall(g_hEquipWearable, client, newitem);
 	}	
+	else if (StrEqual("tf_powerup_bottle", weaponClass, true))
+	{
+		RemoveConflictWearables(client, index);
+
+		SDKCall(g_hEquipWearable, client, newitem);
+	}
 	else
 	{
 		EquipPlayerWeapon(client, newitem);
@@ -2233,9 +2286,9 @@ public int GiveWeaponCustom(int client, int configindex)
 		SetNewAmmo(client, slot, ammo);
 	}
 	
-	char itemname[64];
-	TF2Econ_GetItemName(index, itemname, sizeof(itemname));
-	PrintToChat(client, "%N received custom item %i (%s)", client, index, itemname);
+	//char itemname[64];
+	//TF2Econ_GetItemName(index, itemname, sizeof(itemname));
+	//PrintToChat(client, "%N received custom item %i (%s)", client, index, itemname);
 	
 	return newitem;
 }
